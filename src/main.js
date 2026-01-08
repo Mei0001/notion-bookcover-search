@@ -30,22 +30,8 @@ async function handleSearch(e) {
   clearResults();
 
   try {
-    // 日本語検出（ひらがな、カタカナ、漢字を含むか）
-    const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(query);
-
-    let books;
-    if (isJapanese) {
-      // 日本語書籍の場合、openBDを優先
-      books = await searchOpenBD(query);
-
-      // openBDで見つからない場合、Google Booksで検索
-      if (!books || books.length === 0) {
-        books = await searchGoogleBooks(query);
-      }
-    } else {
-      // 英語書籍の場合、Google Booksを使用
-      books = await searchGoogleBooks(query);
-    }
+    // Google Books APIで検索（より多くの結果が得られる）
+    const books = await searchGoogleBooks(query);
 
     if (!books || books.length === 0) {
       showError('検索結果が見つかりませんでした');
@@ -64,7 +50,8 @@ async function handleSearch(e) {
 
 // Google Books API検索
 async function searchGoogleBooks(query) {
-  const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=20&langRestrict=ja`;
+  // langRestrictを削除して、より多くの結果を取得
+  const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=20`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -87,16 +74,14 @@ async function searchGoogleBooks(query) {
     const isbn10 = identifiers.find(id => id.type === 'ISBN_10');
     const isbn = isbn13?.identifier || isbn10?.identifier || '';
 
-    // 画像URLをNotionで表示可能な形式に変換
-    const thumbnail = fixImageUrl(imageLinks.thumbnail || imageLinks.smallThumbnail || '', isbn);
+    // 画像URLをNotionで表示可能な形式に変換（ISBNは渡さない）
+    const thumbnail = fixImageUrl(imageLinks.thumbnail || imageLinks.smallThumbnail || '');
     const coverUrl = fixImageUrl(
-      imageLinks.extraLarge ||
       imageLinks.large ||
       imageLinks.medium ||
       imageLinks.thumbnail ||
       imageLinks.smallThumbnail ||
-      '',
-      isbn
+      ''
     );
 
     return {
@@ -112,29 +97,13 @@ async function searchGoogleBooks(query) {
 }
 
 // 画像URLをNotionで表示可能な形式に修正
-function fixImageUrl(url, isbn = '') {
+function fixImageUrl(url) {
   if (!url) {
-    // URLがない場合、ISBNがあればOpen Library Covers APIを使用
-    if (isbn) {
-      return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-    }
     return '';
   }
 
   // HTTPをHTTPSに変換（NotionはHTTPSのみサポート）
   url = url.replace(/^http:/, 'https:');
-
-  // Google Books APIのURLの場合、より高解像度の画像を取得
-  if (url.includes('books.google.com')) {
-    // zoom=1 を zoom=0 に変更（より高解像度）
-    url = url.replace(/zoom=1/, 'zoom=0');
-
-    // edge=curl パラメータを削除（シンプルな画像URL）
-    url = url.replace(/&edge=curl/, '');
-
-    // img=1 を img=0 に変更（より高品質）
-    url = url.replace(/img=1/, 'img=0');
-  }
 
   return url;
 }
@@ -178,7 +147,7 @@ async function searchOpenBD(query) {
         const descriptiveDetail = onix.DescriptiveDetail || {};
 
         const isbn = summary.isbn || '';
-        const coverUrl = fixImageUrl(summary.cover || '', isbn);
+        const coverUrl = fixImageUrl(summary.cover || '');
 
         return {
           title: summary.title || descriptiveDetail.TitleDetail?.TitleElement?.TitleText?.content || '不明',
@@ -217,6 +186,13 @@ function createBookCard(book) {
   thumbnail.alt = book.title;
   thumbnail.className = 'book-thumbnail';
   thumbnail.loading = 'lazy';
+
+  // 画像読み込みエラー時のハンドリング
+  thumbnail.onerror = () => {
+    console.warn('Image failed to load:', thumbnail.src);
+    // 代替画像を表示（任意）
+    thumbnail.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="120" viewBox="0 0 80 120"%3E%3Crect fill="%23e4ddd4" width="80" height="120"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="12" fill="%239d8f82"%3E📚%3C/text%3E%3C/svg%3E';
+  };
 
   const info = document.createElement('div');
   info.className = 'book-info';
