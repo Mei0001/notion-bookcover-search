@@ -81,15 +81,62 @@ async function searchGoogleBooks(query) {
     const volumeInfo = item.volumeInfo;
     const imageLinks = volumeInfo.imageLinks || {};
 
+    // ISBNを取得（ISBN_13を優先、なければISBN_10）
+    const identifiers = volumeInfo.industryIdentifiers || [];
+    const isbn13 = identifiers.find(id => id.type === 'ISBN_13');
+    const isbn10 = identifiers.find(id => id.type === 'ISBN_10');
+    const isbn = isbn13?.identifier || isbn10?.identifier || '';
+
+    // 画像URLをNotionで表示可能な形式に変換
+    const thumbnail = fixImageUrl(imageLinks.thumbnail || imageLinks.smallThumbnail || '', isbn);
+    const coverUrl = fixImageUrl(
+      imageLinks.extraLarge ||
+      imageLinks.large ||
+      imageLinks.medium ||
+      imageLinks.thumbnail ||
+      imageLinks.smallThumbnail ||
+      '',
+      isbn
+    );
+
     return {
       title: volumeInfo.title || '不明',
       authors: volumeInfo.authors || [],
       publishedDate: volumeInfo.publishedDate || '',
-      thumbnail: imageLinks.thumbnail || imageLinks.smallThumbnail || '',
-      coverUrl: imageLinks.large || imageLinks.medium || imageLinks.thumbnail || imageLinks.smallThumbnail || '',
+      thumbnail: thumbnail,
+      coverUrl: coverUrl,
+      isbn: isbn,
       source: 'Google Books'
     };
   }).filter(book => book.coverUrl); // 画像のある書籍のみ
+}
+
+// 画像URLをNotionで表示可能な形式に修正
+function fixImageUrl(url, isbn = '') {
+  if (!url) {
+    // URLがない場合、ISBNがあればOpen Library Covers APIを使用
+    if (isbn) {
+      return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+    }
+    return '';
+  }
+
+  // HTTPをHTTPSに変換（NotionはHTTPSのみサポート）
+  url = url.replace(/^http:/, 'https:');
+
+  // Google Books APIのURLの場合、より高解像度の画像を取得
+  if (url.includes('books.google.com')) {
+    // zoom=1 を zoom=0 に変更（より高解像度）
+    url = url.replace(/zoom=1/, 'zoom=0');
+
+    // edge=curl パラメータを削除（シンプルな画像URL）
+    url = url.replace(/&edge=curl/, '');
+
+    // img=1 を img=0 に変更（より高品質）
+    url = url.replace(/img=1/, 'img=0');
+  }
+
+  return url;
 }
 
 // openBD API検索
@@ -130,13 +177,16 @@ async function searchOpenBD(query) {
         const collateralDetail = onix.CollateralDetail || {};
         const descriptiveDetail = onix.DescriptiveDetail || {};
 
+        const isbn = summary.isbn || '';
+        const coverUrl = fixImageUrl(summary.cover || '', isbn);
+
         return {
           title: summary.title || descriptiveDetail.TitleDetail?.TitleElement?.TitleText?.content || '不明',
           authors: summary.author ? [summary.author] : [],
           publishedDate: summary.pubdate || '',
-          thumbnail: summary.cover || '',
-          coverUrl: summary.cover || '',
-          isbn: summary.isbn || '',
+          thumbnail: coverUrl,
+          coverUrl: coverUrl,
+          isbn: isbn,
           source: 'openBD'
         };
       })
@@ -200,6 +250,9 @@ function createBookCard(book) {
 
 // クリップボードにコピー
 async function copyToClipboard(url, cardElement) {
+  // デバッグ用：コピーされるURLをコンソールに出力
+  console.log('📋 Copied URL:', url);
+
   try {
     await navigator.clipboard.writeText(url);
     showCopyFeedback(cardElement);
