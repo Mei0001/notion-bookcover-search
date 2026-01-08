@@ -1,0 +1,22 @@
+{
+  "name": "notion-bookcover-search",
+  "version": "0.1.0",
+  "description": "書籍検索・表紙画像URL取得ツール（Notion埋め込み用）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "notion",
+    "book",
+    "cover",
+    "search"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}
