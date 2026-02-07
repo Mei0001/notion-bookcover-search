@@ -1,4 +1,4 @@
-const RAKUTEN_API_BASE = 'https://app.rakuten.co.jp/services/api/BooksBook/Search/20170404';
+const RAKUTEN_API_BASE = 'https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,24 +19,30 @@ export default async function handler(req, res) {
   }
 
   const appId = process.env.RAKUTEN_APP_ID;
-  if (!appId) {
-    return res.status(500).json({ error: 'RAKUTEN_APP_ID が設定されていません' });
+  const accessKey = process.env.RAKUTEN_ACCESS_KEY;
+  if (!appId || !accessKey) {
+    return res.status(500).json({ error: '楽天APIの設定がされていません' });
   }
 
   try {
     const params = new URLSearchParams({
       applicationId: appId,
+      accessKey: accessKey,
       title: q.trim(),
       hits: '20',
       formatVersion: '2',
     });
 
-    const response = await fetch(`${RAKUTEN_API_BASE}?${params}`);
+    const response = await fetch(`${RAKUTEN_API_BASE}?${params}`, {
+      headers: {
+        'Origin': 'https://notion-bookcover-search.vercel.app',
+      },
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       return res.status(response.status).json({
-        error: errorData.error_description || '楽天APIエラー',
+        error: errorData.error_description || errorData.errors?.errorMessage || '楽天APIエラー',
       });
     }
 
