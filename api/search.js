@@ -1,4 +1,4 @@
-const RAKUTEN_API_BASE = 'https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404';
+const RAKUTEN_API_BASE = 'https://openapi.rakuten.co.jp/services/api/BooksTotal/Search/20170404';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,7 +28,8 @@ export default async function handler(req, res) {
     const params = new URLSearchParams({
       applicationId: appId,
       accessKey: accessKey,
-      title: q.trim(),
+      keyword: q.trim(),
+      booksGenreId: '001',
       hits: '20',
       formatVersion: '2',
     });
