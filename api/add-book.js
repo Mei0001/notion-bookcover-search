@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const notion = new Client({ auth: notionKey });
 
     const properties = {
-      '題名': {
+      '作品名': {
         title: [{ text: { content: title } }],
       },
     };
