@@ -3,11 +3,11 @@ const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const loadingEl = document.getElementById('loading');
 const errorEl = document.getElementById('error');
-const successEl = document.getElementById('success');
 const resultsEl = document.getElementById('results');
 
 // 初期化
 searchForm.addEventListener('submit', handleSearch);
+searchInput.focus();
 
 // 検索処理
 async function handleSearch(e) {
@@ -21,7 +21,6 @@ async function handleSearch(e) {
 
   showLoading();
   hideError();
-  hideSuccess();
   clearResults();
 
   try {
@@ -59,8 +58,8 @@ function displayResults(books) {
 function createBookCard(book) {
   const card = document.createElement('div');
   card.className = 'book-card';
+  card.tabIndex = 0;
 
-  // サムネイル
   const thumbnail = document.createElement('img');
   thumbnail.src = book.thumbnailUrl || book.coverUrl;
   thumbnail.alt = book.title;
@@ -70,7 +69,6 @@ function createBookCard(book) {
     thumbnail.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="120" viewBox="0 0 80 120"%3E%3Crect fill="%23e4ddd4" width="80" height="120"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="30" fill="%239d8f82"%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E';
   };
 
-  // 情報エリア
   const info = document.createElement('div');
   info.className = 'book-info';
 
@@ -93,28 +91,28 @@ function createBookCard(book) {
   info.appendChild(author);
   if (parts.length > 0) info.appendChild(meta);
 
-  // Notion追加ボタン
-  const addBtn = document.createElement('button');
-  addBtn.className = 'add-button';
-  addBtn.textContent = 'Notionに追加';
-  addBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    addToNotion(book, addBtn);
-  });
-
   card.appendChild(thumbnail);
   card.appendChild(info);
-  card.appendChild(addBtn);
+
+  // カードクリックで即追加+Notionページを開く
+  card.addEventListener('click', () => addAndOpen(book, card));
 
   return card;
 }
 
-// Notionにページ追加
-async function addToNotion(book, button) {
-  const originalText = button.textContent;
-  button.textContent = '追加中...';
-  button.disabled = true;
-  button.classList.add('loading');
+// 書籍をNotionに追加してページを開く
+async function addAndOpen(book, card) {
+  // 二重クリック防止
+  if (card.classList.contains('adding')) return;
+
+  card.classList.add('adding');
+  hideError();
+
+  // オーバーレイ表示
+  const overlay = document.createElement('div');
+  overlay.className = 'card-overlay';
+  overlay.textContent = '追加中...';
+  card.appendChild(overlay);
 
   try {
     const response = await fetch('/api/add-book', {
@@ -134,15 +132,17 @@ async function addToNotion(book, button) {
       throw new Error(data.error || 'Notionへの追加に失敗しました');
     }
 
-    button.textContent = '追加済み';
-    button.classList.remove('loading');
-    button.classList.add('done');
-    showSuccess(`「${book.title}」をNotionに追加しました`);
+    // 成功: Notionページを新タブで開く
+    overlay.textContent = '追加完了!';
+    overlay.classList.add('done');
+
+    setTimeout(() => {
+      window.open(data.pageUrl, '_blank');
+    }, 400);
   } catch (error) {
     console.error('Add to Notion error:', error);
-    button.textContent = originalText;
-    button.disabled = false;
-    button.classList.remove('loading');
+    overlay.remove();
+    card.classList.remove('adding');
     showError(error.message);
   }
 }
@@ -164,16 +164,6 @@ function showError(message) {
 
 function hideError() {
   errorEl.classList.add('hidden');
-}
-
-function showSuccess(message) {
-  successEl.textContent = message;
-  successEl.classList.remove('hidden');
-  setTimeout(() => hideSuccess(), 3000);
-}
-
-function hideSuccess() {
-  successEl.classList.add('hidden');
 }
 
 function clearResults() {
