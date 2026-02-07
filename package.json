@@ -1,7 +1,7 @@
 {
   "name": "notion-bookcover-search",
-  "version": "0.1.0",
-  "description": "書籍検索・表紙画像URL取得ツール（Notion埋め込み用）",
+  "version": "0.2.0",
+  "description": "書籍検索→Notion本棚自動登録ツール",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,10 +12,14 @@
     "notion",
     "book",
     "cover",
-    "search"
+    "search",
+    "rakuten"
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@notionhq/client": "^2.2.15"
+  },
   "devDependencies": {
     "vite": "^5.4.11"
   }

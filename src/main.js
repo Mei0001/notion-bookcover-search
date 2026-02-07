@@ -1,16 +1,10 @@
-// API設定
-const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
-const OPENBD_API = 'https://api.openbd.jp/v1/get';
-
 // DOM要素
 const searchForm = document.getElementById('search-form');
 const searchInput = document.getElementById('search-input');
 const loadingEl = document.getElementById('loading');
 const errorEl = document.getElementById('error');
+const successEl = document.getElementById('success');
 const resultsEl = document.getElementById('results');
-
-// 状態管理
-let currentBooks = [];
 
 // 初期化
 searchForm.addEventListener('submit', handleSearch);
@@ -27,152 +21,37 @@ async function handleSearch(e) {
 
   showLoading();
   hideError();
+  hideSuccess();
   clearResults();
 
   try {
-    // Google Books APIで検索（より多くの結果が得られる）
-    const books = await searchGoogleBooks(query);
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
 
-    if (!books || books.length === 0) {
+    if (!response.ok) {
+      showError(data.error || '検索に失敗しました');
+      return;
+    }
+
+    if (!data.books || data.books.length === 0) {
       showError('検索結果が見つかりませんでした');
       return;
     }
 
-    currentBooks = books;
-    displayResults(books);
+    displayResults(data.books);
   } catch (error) {
     console.error('Search error:', error);
-    showError('検索中にエラーが発生しました。もう一度お試しください。');
+    showError('検索中にエラーが発生しました');
   } finally {
     hideLoading();
-  }
-}
-
-// Google Books API検索
-async function searchGoogleBooks(query) {
-  // langRestrictを削除して、より多くの結果を取得
-  const url = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=20`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('Google Books API error');
-  }
-
-  const data = await response.json();
-
-  if (!data.items) {
-    return [];
-  }
-
-  return data.items.map(item => {
-    const volumeInfo = item.volumeInfo;
-    const imageLinks = volumeInfo.imageLinks || {};
-
-    // ISBNを取得（ISBN_13を優先、なければISBN_10）
-    const identifiers = volumeInfo.industryIdentifiers || [];
-    const isbn13 = identifiers.find(id => id.type === 'ISBN_13');
-    const isbn10 = identifiers.find(id => id.type === 'ISBN_10');
-    const isbn = isbn13?.identifier || isbn10?.identifier || '';
-
-    // 画像URLをNotionで表示可能な形式に変換（ISBNは渡さない）
-    const thumbnail = fixImageUrl(imageLinks.thumbnail || imageLinks.smallThumbnail || '');
-    const coverUrl = fixImageUrl(
-      imageLinks.large ||
-      imageLinks.medium ||
-      imageLinks.thumbnail ||
-      imageLinks.smallThumbnail ||
-      ''
-    );
-
-    return {
-      title: volumeInfo.title || '不明',
-      authors: volumeInfo.authors || [],
-      publishedDate: volumeInfo.publishedDate || '',
-      thumbnail: thumbnail,
-      coverUrl: coverUrl,
-      isbn: isbn,
-      source: 'Google Books'
-    };
-  }).filter(book => book.coverUrl); // 画像のある書籍のみ
-}
-
-// 画像URLをNotionで表示可能な形式に修正
-function fixImageUrl(url) {
-  if (!url) {
-    return '';
-  }
-
-  // HTTPをHTTPSに変換（NotionはHTTPSのみサポート）
-  url = url.replace(/^http:/, 'https:');
-
-  return url;
-}
-
-// openBD API検索
-async function searchOpenBD(query) {
-  // openBDはISBN検索がメインなので、タイトル検索は制限的
-  // ここでは簡易的にGoogle Booksで検索してISBNを取得し、openBDで詳細を取得する方式を採用
-  // より良い実装には専用の書籍検索APIが必要
-
-  // まずGoogle BooksでISBNを取得
-  const googleBooks = await searchGoogleBooks(query);
-
-  // ISBNがあるものを抽出
-  const isbns = googleBooks
-    .map(book => book.isbn)
-    .filter(isbn => isbn);
-
-  if (isbns.length === 0) {
-    return googleBooks;
-  }
-
-  // openBDで詳細を取得（最大10冊）
-  const isbnQuery = isbns.slice(0, 10).join(',');
-  const url = `${OPENBD_API}?isbn=${isbnQuery}`;
-
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (!data || data.length === 0) {
-      return googleBooks;
-    }
-
-    return data
-      .filter(item => item !== null)
-      .map(item => {
-        const summary = item.summary || {};
-        const onix = item.onix || {};
-        const collateralDetail = onix.CollateralDetail || {};
-        const descriptiveDetail = onix.DescriptiveDetail || {};
-
-        const isbn = summary.isbn || '';
-        const coverUrl = fixImageUrl(summary.cover || '');
-
-        return {
-          title: summary.title || descriptiveDetail.TitleDetail?.TitleElement?.TitleText?.content || '不明',
-          authors: summary.author ? [summary.author] : [],
-          publishedDate: summary.pubdate || '',
-          thumbnail: coverUrl,
-          coverUrl: coverUrl,
-          isbn: isbn,
-          source: 'openBD'
-        };
-      })
-      .filter(book => book.coverUrl);
-  } catch (error) {
-    console.error('openBD error:', error);
-    return googleBooks;
   }
 }
 
 // 検索結果表示
 function displayResults(books) {
   resultsEl.innerHTML = '';
-
-  books.forEach(book => {
-    const bookCard = createBookCard(book);
-    resultsEl.appendChild(bookCard);
+  books.forEach((book) => {
+    resultsEl.appendChild(createBookCard(book));
   });
 }
 
@@ -181,19 +60,17 @@ function createBookCard(book) {
   const card = document.createElement('div');
   card.className = 'book-card';
 
+  // サムネイル
   const thumbnail = document.createElement('img');
-  thumbnail.src = book.thumbnail || book.coverUrl;
+  thumbnail.src = book.thumbnailUrl || book.coverUrl;
   thumbnail.alt = book.title;
   thumbnail.className = 'book-thumbnail';
   thumbnail.loading = 'lazy';
-
-  // 画像読み込みエラー時のハンドリング
   thumbnail.onerror = () => {
-    console.warn('Image failed to load:', thumbnail.src);
-    // 代替画像を表示（任意）
-    thumbnail.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="120" viewBox="0 0 80 120"%3E%3Crect fill="%23e4ddd4" width="80" height="120"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="12" fill="%239d8f82"%3E📚%3C/text%3E%3C/svg%3E';
+    thumbnail.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="120" viewBox="0 0 80 120"%3E%3Crect fill="%23e4ddd4" width="80" height="120"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="30" fill="%239d8f82"%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E';
   };
 
+  // 情報エリア
   const info = document.createElement('div');
   info.className = 'book-info';
 
@@ -201,78 +78,76 @@ function createBookCard(book) {
   title.className = 'book-title';
   title.textContent = book.title;
 
-  const authors = document.createElement('p');
-  authors.className = 'book-authors';
-  authors.textContent = book.authors.join(', ') || '著者不明';
+  const author = document.createElement('p');
+  author.className = 'book-authors';
+  author.textContent = book.author || '著者不明';
 
-  const date = document.createElement('p');
-  date.className = 'book-date';
-  date.textContent = book.publishedDate || '';
+  const meta = document.createElement('p');
+  meta.className = 'book-meta';
+  const parts = [];
+  if (book.publisherName) parts.push(book.publisherName);
+  if (book.salesDate) parts.push(book.salesDate);
+  meta.textContent = parts.join(' / ');
 
   info.appendChild(title);
-  info.appendChild(authors);
-  if (book.publishedDate) {
-    info.appendChild(date);
-  }
+  info.appendChild(author);
+  if (parts.length > 0) info.appendChild(meta);
+
+  // Notion追加ボタン
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-button';
+  addBtn.textContent = 'Notionに追加';
+  addBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    addToNotion(book, addBtn);
+  });
 
   card.appendChild(thumbnail);
   card.appendChild(info);
-
-  // クリックでURLをコピー
-  card.addEventListener('click', () => copyToClipboard(book.coverUrl, card));
+  card.appendChild(addBtn);
 
   return card;
 }
 
-// クリップボードにコピー
-async function copyToClipboard(url, cardElement) {
-  // デバッグ用：コピーされるURLをコンソールに出力
-  console.log('📋 Copied URL:', url);
+// Notionにページ追加
+async function addToNotion(book, button) {
+  const originalText = button.textContent;
+  button.textContent = '追加中...';
+  button.disabled = true;
+  button.classList.add('loading');
 
   try {
-    await navigator.clipboard.writeText(url);
-    showCopyFeedback(cardElement);
+    const response = await fetch('/api/add-book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: book.title,
+        author: book.author,
+        coverUrl: book.coverUrl,
+        description: book.itemCaption,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Notionへの追加に失敗しました');
+    }
+
+    button.textContent = '追加済み';
+    button.classList.remove('loading');
+    button.classList.add('done');
+    showSuccess(`「${book.title}」をNotionに追加しました`);
   } catch (error) {
-    console.error('Clipboard error:', error);
-    // フォールバック: テキストエリアを使用
-    fallbackCopy(url, cardElement);
+    console.error('Add to Notion error:', error);
+    button.textContent = originalText;
+    button.disabled = false;
+    button.classList.remove('loading');
+    showError(error.message);
   }
 }
 
-// クリップボードコピーのフォールバック
-function fallbackCopy(text, cardElement) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-
-  try {
-    document.execCommand('copy');
-    showCopyFeedback(cardElement);
-  } catch (error) {
-    console.error('Fallback copy error:', error);
-    showError('コピーに失敗しました');
-  } finally {
-    document.body.removeChild(textarea);
-  }
-}
-
-// コピー成功フィードバック
-function showCopyFeedback(cardElement) {
-  const feedback = document.createElement('div');
-  feedback.className = 'copy-feedback';
-  feedback.textContent = '✓ Copied!';
-
-  cardElement.appendChild(feedback);
-
-  setTimeout(() => {
-    feedback.remove();
-  }, 2000);
-}
-
-// UI制御関数
+// UI制御
 function showLoading() {
   loadingEl.classList.remove('hidden');
 }
@@ -284,10 +159,21 @@ function hideLoading() {
 function showError(message) {
   errorEl.textContent = message;
   errorEl.classList.remove('hidden');
+  setTimeout(() => hideError(), 5000);
 }
 
 function hideError() {
   errorEl.classList.add('hidden');
+}
+
+function showSuccess(message) {
+  successEl.textContent = message;
+  successEl.classList.remove('hidden');
+  setTimeout(() => hideSuccess(), 3000);
+}
+
+function hideSuccess() {
+  successEl.classList.add('hidden');
 }
 
 function clearResults() {

@@ -395,37 +395,61 @@ header h1 {
   margin-top: auto;
 }
 
-/* Copy Feedback */
-.copy-feedback {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  padding: var(--spacing-md) var(--spacing-xl);
+/* Success Message */
+.success {
+  max-width: 600px;
+  margin: 0 auto var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--color-success);
   color: white;
   border-radius: var(--radius-md);
-  font-weight: 600;
-  font-size: 1rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  z-index: 10;
-  animation: copyPulse 0.5s ease-out;
-  pointer-events: none;
+  text-align: center;
+  font-weight: 500;
+  animation: fadeIn var(--transition-base);
 }
 
-@keyframes copyPulse {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
+/* Add to Notion Button */
+.add-button {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  background-color: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.add-button:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--color-shadow-hover);
+}
+
+.add-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.add-button.loading {
+  background-color: var(--color-text-tertiary);
+}
+
+.add-button.done {
+  background-color: var(--color-success);
+}
+
+/* Book Meta */
+.book-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  margin-top: auto;
 }
 
 /* Hidden utility */
